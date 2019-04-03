@@ -10,7 +10,7 @@ pub struct Configuration {
 }
 
 impl Configuration {
-	pub fn new(conf_str: &str) -> Result<Self, toml::de::Error> {
-		toml::from_str(conf_str)
+	pub fn new(path: &str) -> Result<Self, toml::de::Error> {
+		toml::from_str(&std::fs::read_to_string(path).unwrap())
 	}
 }

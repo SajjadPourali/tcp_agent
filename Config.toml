@@ -1,0 +1,6 @@
+listen="127.0.0.1:12345"
+connect="198.143.180.42:22"
+
+#[ssl]
+#private_key= "private.key"
+#certificate= "cert.pem"

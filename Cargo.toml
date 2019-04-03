@@ -19,5 +19,5 @@ overflow-checks = false
 futures = "0.1"
 tokio = "0.1"
 rlua="0.16"
-toml = "0.4"
 serde = { version = "1.0", features = ["derive"] }
+toml = "0.4"
