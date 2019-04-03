@@ -2,6 +2,7 @@ use super::Direction;
 use rlua::Lua as Rlua;
 use std::sync::{Arc, Mutex};
 use tokio::prelude::*;
+use tokio::sync::mpsc;
 
 pub struct Lua {
 	lua: rlua::Lua,
@@ -11,13 +12,14 @@ pub struct Lua {
 impl Lua {
 	pub fn new(
 		connection_data: Arc<Mutex<super::ConnectionData>>,
-		write_sockets: (Arc<Mutex<AsyncWrite + Send>>, Arc<Mutex<AsyncWrite + Send>>),
+		write_sockets: mpsc::Sender<Direction<Vec<u8>>>,
 	) -> Lua {
 		let lua = Lua {
 			lua: Rlua::new(),
 			connection_data: connection_data.clone(),
 		};
 		lua.set_registers();
+		lua.set_default_funcs();
 		lua.set_read_func();
 		lua.set_write_func(write_sockets);
 		lua
@@ -39,16 +41,40 @@ impl Lua {
 				});
 				let mut cd = self.connection_data.lock().unwrap();
 				cd.push_modified(Direction::None);
-				println!("{:?}", *cd);
 			})
 			.unwrap()
+	}
+	fn set_default_funcs(&self) {
+		self.lua.context(|lua_ctx| {
+			lua_ctx
+				.load(
+					r#"
+						function data2str(data)
+    						local str = ""
+						    for k, v in pairs(data) do
+        						str = str .. string.char(v)
+						    end
+    						return str
+						end
+
+						function str2data(str)
+    					local table = {}
+					    for i = 1, #str do
+        					table[i] = string.byte(str:sub(i, i))
+					    end
+    					return table
+					end
+			"#,
+				)
+				.exec()
+				.unwrap();
+		});
 	}
 	fn set_read_func(&self) {
 		let connection_data = self.connection_data.clone();
 		self.lua.context(|lua_ctx| {
 			let recive_data = lua_ctx
 				.create_function(move |ctx, buffer_size: usize| loop {
-					// println!("---");
 					let mut connection_data = connection_data.lock().unwrap();
 					match connection_data.get(buffer_size) {
 						Direction::Out(data) => {
@@ -56,6 +82,7 @@ impl Lua {
 								let table = ctx.create_table().unwrap();
 								table.set("status", 1).unwrap();
 								table.set("data", data).unwrap();
+								table.set("no", connection_data.get_no()).unwrap();
 								Ok(table)
 							};
 						}
@@ -65,6 +92,7 @@ impl Lua {
 								let table = ctx.create_table().unwrap();
 								table.set("status", -1).unwrap();
 								table.set("data", data).unwrap();
+								table.set("no", connection_data.get_no()).unwrap();
 								Ok(table)
 							};
 						}
@@ -86,26 +114,20 @@ impl Lua {
 			lua_ctx.globals().set("recive", recive_data).unwrap();
 		})
 	}
-	fn set_write_func(
-		&self,
-		write_sockets: (Arc<Mutex<AsyncWrite + Send>>, Arc<Mutex<AsyncWrite + Send>>),
-	) {
+	fn set_write_func(&self, write_sockets: mpsc::Sender<Direction<Vec<u8>>>) {
 		let connection_data = self.connection_data.clone();
-		let write_sockets = (write_sockets.0.clone(), write_sockets.1.clone());
 		self.lua.context(|lua_ctx| {
 			let send_data = lua_ctx
 				.create_function(move |_, (direction, stri): (i8, Vec<u8>)| {
 					let mut cd = connection_data.lock().unwrap();
+					let sockets = write_sockets.clone();
 					if direction == -1 {
 						cd.push_modified(Direction::In(stri.clone()));
-						let mut out_socket = write_sockets.0.lock().unwrap();
-						out_socket.write_all(&stri).unwrap();
+						sockets.send(Direction::In(stri.to_vec())).wait().unwrap();
 					} else if direction == 1 {
+						sockets.send(Direction::Out(stri.to_vec())).wait().unwrap();
 						cd.push_modified(Direction::Out(stri.clone()));
-						let mut in_socket = write_sockets.1.lock().unwrap();
-						in_socket.write_all(&stri).unwrap();
 					}
-//					println!("{:?}", *cd);
 					Ok(())
 				})
 				.unwrap();

@@ -160,7 +160,10 @@ impl ConnectionData {
             }
         }
     }
-    pub fn get_modified(&mut self, size: usize) -> Direction<Vec<u8>> {
+    pub fn get_no(&mut self) -> usize {
+        self.read_position.0
+    } 
+    pub fn _get_modified(&mut self, size: usize) -> Direction<Vec<u8>> {
         loop {
             match self.modified_data.get(self.write_position.0) {
                 Some(Direction::In(data)) => {
