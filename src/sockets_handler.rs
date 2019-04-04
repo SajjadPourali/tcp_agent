@@ -14,31 +14,37 @@ enum SocketState {
 }
 
 use tokio::prelude::{AsyncRead, AsyncWrite, Poll, Sink, Stream};
-pub struct SocketsHandler {
-	server_reader: Option<tokio::io::ReadHalf<tokio::net::TcpStream>>,
-	server_writer: Option<tokio::io::WriteHalf<tokio::net::TcpStream>>,
-	client_reader: Option<tokio::io::ReadHalf<tokio::net::TcpStream>>,
-	client_writer: Option<tokio::io::WriteHalf<tokio::net::TcpStream>>,
+pub struct SocketsHandler<R, W> {
+	server_reader: Option<R>,
+	server_writer: Option<W>,
+	client_reader: Option<R>,
+	client_writer: Option<W>,
 	socket_state: SocketState,
 	read_buf: Box<[u8]>,
 }
 
-impl SocketsHandler {
-	pub fn new(server: tokio::net::TcpStream, client: tokio::net::TcpStream) -> SocketsHandler {
-		let (sr, sw) = server.split();
-		let (cr, cw) = client.split();
+impl<R, W> SocketsHandler<R, W>
+where
+	R: AsyncRead,
+	W: AsyncWrite,
+{
+	pub fn new(server: (R, W), client: (R, W)) -> SocketsHandler<R, W> {
 		SocketsHandler {
-			server_reader: Some(sr),
-			server_writer: Some(sw),
-			client_reader: Some(cr),
-			client_writer: Some(cw),
+			server_reader: Some(server.0),
+			server_writer: Some(server.1),
+			client_reader: Some(client.0),
+			client_writer: Some(client.1),
 			socket_state: SocketState::AllOpen,
 			read_buf: Box::new([0; 2048]),
 		}
 	}
 }
 
-impl Stream for SocketsHandler {
+impl<R, W> Stream for SocketsHandler<R, W>
+where
+	R: AsyncRead,
+	W: AsyncWrite,
+{
 	type Item = Direction<Vec<u8>>;
 	type Error = tokio::io::Error;
 	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
@@ -95,7 +101,11 @@ impl Stream for SocketsHandler {
 	}
 }
 
-impl Sink for SocketsHandler {
+impl<R, W> Sink for SocketsHandler<R, W>
+where
+	R: AsyncRead,
+	W: AsyncWrite,
+{
 	type SinkItem = Direction<Vec<u8>>;
 	type SinkError = tokio::io::Error;
 	fn start_send(

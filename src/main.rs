@@ -14,7 +14,7 @@ use configuration::Configuration;
 use futures::sink::Sink;
 use std::sync::{Arc, Mutex};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::prelude::{Future, Stream};
+use tokio::prelude::{AsyncRead, Future, Stream};
 use tokio::sync::mpsc;
 
 fn main() {
@@ -23,15 +23,15 @@ fn main() {
 	let listener = TcpListener::bind(&conf.listen).unwrap();
 	let server = listener
 		.incoming()
-		.for_each(move |socket| {
+		.for_each(move |server_socket| {
 			let stream = TcpStream::connect(&conf.connect);
-			stream.and_then(|stream| {
+			stream.and_then(|client_stream| {
 				let connection_data = Arc::new(Mutex::new(ConnectionData::new()));
 				let stream_push_connection_data = connection_data.clone();
 				let stream_push_connection_data_finish = connection_data.clone();
 
 				let (command_tx, command_rx) = mpsc::channel::<Direction<Vec<u8>>>(1000);
-				let sh = SocketsHandler::new(socket, stream);
+				let sh = SocketsHandler::new(server_socket.split(), client_stream.split());
 				let (network_sender, network_receiver) = sh.split();
 
 				let lua_embeded = Lua::new(connection_data, command_tx.clone());
