@@ -50,19 +50,19 @@ impl Lua {
 				.load(
 					r#"
 						function data2str(data)
-    						local str = ""
-						    for k, v in pairs(data) do
-        						str = str .. string.char(v)
-						    end
-    						return str
+							local str = ""
+							for k, v in pairs(data) do
+								str = str .. string.char(v)
+							end
+							return str
 						end
 
 						function str2data(str)
-    					local table = {}
-					    for i = 1, #str do
-        					table[i] = string.byte(str:sub(i, i))
-					    end
-    					return table
+						local table = {}
+						for i = 1, #str do
+							table[i] = string.byte(str:sub(i, i))
+						end
+						return table
 					end
 			"#,
 				)
