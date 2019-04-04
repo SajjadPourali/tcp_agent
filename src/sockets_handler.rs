@@ -17,8 +17,8 @@ use tokio::prelude::{AsyncRead, AsyncWrite, Poll, Sink, Stream};
 pub struct SocketsHandler<R, W> {
 	server_reader: Option<R>,
 	server_writer: Option<W>,
-	client_reader: Option<R>,
-	client_writer: Option<W>,
+	client_reader: Option<tokio::io::ReadHalf<tokio::net::TcpStream>>,
+	client_writer: Option<tokio::io::WriteHalf<tokio::net::TcpStream>>,
 	socket_state: SocketState,
 	read_buf: Box<[u8]>,
 }
@@ -28,12 +28,13 @@ where
 	R: AsyncRead,
 	W: AsyncWrite,
 {
-	pub fn new(server: (R, W), client: (R, W)) -> SocketsHandler<R, W> {
+	pub fn new(server: (R, W), client: tokio::net::TcpStream) -> SocketsHandler<R, W> {
+		let (cr, cw) = client.split();
 		SocketsHandler {
 			server_reader: Some(server.0),
 			server_writer: Some(server.1),
-			client_reader: Some(client.0),
-			client_writer: Some(client.1),
+			client_reader: Some(cr),
+			client_writer: Some(cw),
 			socket_state: SocketState::AllOpen,
 			read_buf: Box::new([0; 2048]),
 		}

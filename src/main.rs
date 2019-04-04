@@ -11,6 +11,9 @@ use lua::Lua;
 mod configuration;
 use configuration::Configuration;
 
+mod proxy_parser;
+use proxy_parser::ProxyParser;
+
 use futures::sink::Sink;
 use std::sync::{Arc, Mutex};
 use tokio::net::{TcpListener, TcpStream};
@@ -24,6 +27,8 @@ fn main() {
 	let server = listener
 		.incoming()
 		.for_each(move |server_socket| {
+			//			let server_socket = ProxyParser::new(server_socket.split());
+
 			let stream = TcpStream::connect(&conf.connect);
 			stream.and_then(|client_stream| {
 				let connection_data = Arc::new(Mutex::new(ConnectionData::new()));
@@ -31,7 +36,7 @@ fn main() {
 				let stream_push_connection_data_finish = connection_data.clone();
 
 				let (command_tx, command_rx) = mpsc::channel::<Direction<Vec<u8>>>(1000);
-				let sh = SocketsHandler::new(server_socket.split(), client_stream.split());
+				let sh = SocketsHandler::new(server_socket.split(), client_stream);
 				let (network_sender, network_receiver) = sh.split();
 
 				let lua_embeded = Lua::new(connection_data, command_tx.clone());
